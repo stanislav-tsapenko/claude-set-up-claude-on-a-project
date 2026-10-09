@@ -22,3 +22,15 @@
 - `/memory` shows `CLAUDE.md` loaded from the project root.
 - `/permissions` shows the allow/ask/deny rules from `.claude/settings.json`.
 - Could not run `npm install` / `npm test` / `npm run lint` in this sandbox (`node`/`npm` are not installed here), so the commands in `CLAUDE.md` are verified by reading `package.json`'s `scripts` block rather than by executing them.
+
+## Wire Claude into your stack
+
+**Server.** I connected the filesystem MCP server (@modelcontextprotocol/server-filesystem) at project scope in .mcp.json, limited to the project folder, with no credentials. It gives structured access (directory_tree, search_files, reading several files at once). The permission rule in .claude/settings.json allows only mcp__filesystem__read_text_file; the write, edit and move tools still ask for permission. On Windows the server is started through cmd /c npx.
+
+**Skill.** .claude/skills/error-responses/SKILL.md captures how this project returns errors: JSON { error: "..." } sent with return, 400 for validation (required fields first, then format), 404 with "<Thing> not found", and tests that check both the status and the exact message. The description is narrow: it fires only when someone adds or changes an Express route or its validation. I confirmed it by asking for a new GET /orders/:id route without naming the skill; the answer used the project's error format.
+
+**Command.** I added /test <file path> and /scaffold <type> <name> in .claude/commands/. /test is worth a shortcut because the same short command writes tests that match the project's style for any file (it produced tests for health, store and users). /scaffold uses $1 and $2, so a two-word name has to be wrapped in quotes.
+
+**Hook.** A PostToolUse hook (it reacts after the edit, it does not prevent) with matcher Edit|Write runs "npx eslint --max-warnings 0 routes tests db server.js 1>&2 || exit 2". Exit code 2 sends the lint output back to Claude. I added --max-warnings 0 because an unused variable is only a warning in this ESLint config. I triggered it on purpose with an unused variable and saw the blocking error.
+
+**Headless.** I ran: claude -p "List all Express routes in the routes folder: method and path. Change nothing." --allowedTools "Read,Glob,Grep". It is read-only: Edit, Write and Bash are not allowed, so it is safe to run unattended.
